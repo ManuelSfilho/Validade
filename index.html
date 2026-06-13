@@ -76,6 +76,18 @@
   </div>
 </header>
 
+<!-- BANCO DE PRODUTOS -->
+<div class="container" id="dbScreen" style="padding-bottom:0">
+  <div class="card" id="dbCard">
+    <h2 style="font-size:15px;margin-bottom:10px">📋 Banco de Produtos (Excel)</h2>
+    <p style="font-size:13px;color:#64748b;margin-bottom:10px" id="dbStatus">Carregando produtos.xlsx...</p>
+    <div class="actions-row" style="margin-top:0">
+      <button class="btn btn-secondary" onclick="salvarBanco()">⬇️ Exportar produtos.xlsx atualizado</button>
+    </div>
+  </div>
+</div>
+
+
 <!-- TELA LOGIN FUNCIONÁRIO -->
 <div class="container" id="loginScreen">
   <div class="card login-box">
@@ -95,7 +107,7 @@
     <label>Código de barras</label>
     <div id="reader"></div>
     <div class="scan-row">
-      <input type="text" id="codigo" placeholder="Código (escaneie ou digite)" inputmode="numeric">
+      <input type="text" id="codigo" placeholder="Código (escaneie ou digite)" inputmode="numeric" onchange="consultarProduto(this.value)" onkeydown="if(event.key==='Enter'){consultarProduto(this.value)}">
       <button class="btn btn-secondary" id="btnScan">📷</button>
     </div>
   </div>
@@ -198,7 +210,117 @@
   </div>
 </div>
 
+<!-- MODAL NOVO PRODUTO -->
+<div class="modal-bg hidden" id="newProdModal">
+  <div class="modal">
+    <h2>Produto não encontrado</h2>
+    <p style="font-size:13px;color:#64748b;margin-bottom:10px">Código <b id="newProdCodigo"></b> não está no banco. Cadastre a descrição:</p>
+    <div class="field">
+      <label>Descrição</label>
+      <input type="text" id="newProdDesc" placeholder="Descrição do produto">
+    </div>
+    <div class="actions-row">
+      <button class="btn btn-secondary" onclick="closeModal('newProdModal')">Cancelar</button>
+      <button class="btn btn-success" onclick="confirmarNovoProduto()">Cadastrar</button>
+    </div>
+  </div>
+</div>
+
 <script>
+
+// ---------- BANCO DE PRODUTOS (Excel) ----------
+let produtosDB = new Map(); // codigoBarras(string) -> descricao
+const produtosFileName = 'produtos.xlsx';
+let novosProdutos = new Map(); // produtos cadastrados nesta sessão (localStorage)
+
+function setDbStatus(msg){ document.getElementById('dbStatus').textContent = msg; }
+
+function parseWorkbookArrayBuffer(buf){
+  const data = new Uint8Array(buf);
+  const wb = XLSX.read(data, {type:'array'});
+  produtosDB = new Map();
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1});
+  for(let i=1;i<rows.length;i++){
+    const cod = rows[i][0];
+    const desc = rows[i][1];
+    if(cod !== undefined && cod !== null && String(cod).trim()!==''){
+      produtosDB.set(String(cod).trim(), desc!=null? String(desc): '');
+    }
+  }
+}
+
+// Carrega produtos.xlsx automaticamente (mesma pasta do index.html, funciona no GitHub Pages)
+async function autoLoadProdutos(){
+  // produtos cadastrados localmente em sessões anteriores (persistem no navegador)
+  try{
+    const saved = load('novosProdutos');
+    if(saved) novosProdutos = new Map(Object.entries(saved));
+  }catch(e){}
+
+  try{
+    const resp = await fetch(produtosFileName, {cache:'no-store'});
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const buf = await resp.arrayBuffer();
+    parseWorkbookArrayBuffer(buf);
+    // mescla produtos novos salvos localmente
+    for(const [cod,desc] of novosProdutos.entries()) produtosDB.set(cod,desc);
+    setDbStatus(`✅ ${produtosDB.size} produtos carregados automaticamente de "${produtosFileName}".`);
+  }catch(err){
+    console.error(err);
+    for(const [cod,desc] of novosProdutos.entries()) produtosDB.set(cod,desc);
+    setDbStatus(`⚠️ Não foi possível carregar "${produtosFileName}" (verifique se o arquivo está na mesma pasta do index.html).`);
+  }
+}
+
+function consultarProduto(codigo){
+  codigo = String(codigo).trim();
+  if(!codigo) return;
+  const desc = produtosDB.get(codigo);
+  if(desc !== undefined){
+    document.getElementById('descricao').value = desc;
+  } else {
+    abrirNovoProdutoModal(codigo);
+  }
+}
+
+let codigoPendente = null;
+function abrirNovoProdutoModal(codigo){
+  codigoPendente = codigo;
+  document.getElementById('newProdCodigo').textContent = codigo;
+  document.getElementById('newProdDesc').value='';
+  document.getElementById('newProdModal').classList.remove('hidden');
+}
+function confirmarNovoProduto(){
+  const desc = document.getElementById('newProdDesc').value.trim();
+  if(!desc){ alert('Digite a descrição.'); return; }
+  produtosDB.set(codigoPendente, desc);
+  novosProdutos.set(codigoPendente, desc);
+  save('novosProdutos', Object.fromEntries(novosProdutos));
+  document.getElementById('descricao').value = desc;
+  closeModal('newProdModal');
+  setDbStatus(`${produtosDB.size} produtos disponíveis (${novosProdutos.size} cadastrados localmente, ainda não estão no produtos.xlsx do repositório).`);
+}
+
+// Exporta produtos.xlsx atualizado (banco original + novos cadastrados localmente)
+// para você substituir manualmente o arquivo no repositório/GitHub Pages.
+function salvarBanco(){
+  if(produtosDB.size===0){ alert('Banco ainda não foi carregado.'); return; }
+  const rows = [['Código de barras','Descrição']];
+  for(const [cod,desc] of produtosDB.entries()){
+    rows.push([cod, desc]);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+  XLSX.writeFile(wb, produtosFileName);
+  setDbStatus(`${produtosDB.size} produtos exportados. Substitua o "${produtosFileName}" no seu repositório do GitHub Pages.`);
+}
+
+autoLoadProdutos();
+
+
+
 // ---------- DADOS ----------
 const DEFAULTS = {
   adminPass: "1234",
@@ -278,6 +400,7 @@ document.getElementById('btnScan').onclick = ()=>{
     (decodedText)=>{
       document.getElementById('codigo').value = decodedText;
       html5QrCode.stop().then(()=>{ readerDiv.innerHTML=''; scanning=false; });
+      consultarProduto(decodedText);
     },
     ()=>{}
   ).then(()=>{ scanning = true; }).catch(err=>{
