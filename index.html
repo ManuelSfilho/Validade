@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lançamento de Produtos</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1e293b">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  :root{
+    --primary:#1e293b;
+    --accent:#3b82f6;
+    --green:#16a34a;
+    --yellow:#eab308;
+    --orange:#f97316;
+    --red:#dc2626;
+    --bg:#f1f5f9;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  body{background:var(--bg);color:#1e293b;padding-bottom:70px}
+  header{background:var(--primary);color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:50}
+  header h1{font-size:18px}
+  header button{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;padding:6px 10px;border-radius:8px;font-size:13px}
+  .container{padding:14px;max-width:700px;margin:0 auto}
+  .card{background:#fff;border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+  label{display:block;font-size:13px;font-weight:600;margin-bottom:5px;color:#334155}
+  input,select,button.btn{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:10px;font-size:15px;background:#fff}
+  .field{margin-bottom:12px}
+  .row{display:flex;gap:10px}
+  .row .field{flex:1}
+  button.btn{cursor:pointer;font-weight:600;border:none}
+  button.btn.btn-primary{background:var(--accent);color:#fff}
+  button.btn.btn-secondary{background:#e2e8f0;color:#1e293b}
+  button.btn.btn-success{background:var(--green);color:#fff}
+  button.btn.btn-danger{background:var(--red);color:#fff}
+  button.btn.btn-warning{background:#f59e0b;color:#fff}
+  #reader{width:100%;border-radius:10px;overflow:hidden;margin-bottom:10px}
+  .scan-row{display:flex;gap:8px}
+  .scan-row input{flex:1}
+  .scan-row button{width:auto;padding:11px 14px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px 6px;text-align:left;border-bottom:1px solid #e2e8f0}
+  th{background:#f8fafc;font-size:12px;color:#64748b;text-transform:uppercase}
+  .tag{display:inline-block;padding:3px 8px;border-radius:6px;color:#fff;font-size:11px;font-weight:700}
+  .tag-green{background:var(--green)}
+  .tag-yellow{background:var(--yellow);color:#1e293b}
+  .tag-orange{background:var(--orange)}
+  .tag-red{background:var(--red)}
+  .tag-expired{background:#7f1d1d}
+  .actions-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .actions-row button{flex:1;min-width:120px}
+  .hidden{display:none!important}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+  .modal{background:#fff;border-radius:14px;padding:20px;max-width:400px;width:100%;max-height:85vh;overflow:auto}
+  .modal h2{margin-bottom:14px;font-size:18px}
+  .tabs{display:flex;gap:6px;margin-bottom:14px}
+  .tab{flex:1;padding:9px;text-align:center;background:#e2e8f0;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
+  .tab.active{background:var(--accent);color:#fff}
+  .list-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;font-size:14px}
+  .small-btn{padding:5px 9px;font-size:12px;border-radius:6px;border:none;background:#fee2e2;color:#dc2626;cursor:pointer}
+  .login-box{max-width:340px;margin:60px auto}
+  .empty{text-align:center;color:#94a3b8;padding:20px;font-size:14px}
+  .delete-x{background:none;border:none;color:#dc2626;font-size:16px;cursor:pointer}
+  .table-wrap{overflow-x:auto}
+</style>
+</head>
+<body>
+
+<header>
+  <h1 id="appTitle">📦 Lançamentos</h1>
+  <div style="display:flex;gap:8px">
+    <button id="btnAdmin">Admin</button>
+    <button id="btnLogout" class="hidden">Sair</button>
+  </div>
+</header>
+
+<!-- TOAST NOTIFICAÇÃO -->
+<div id="toast" class="hidden" style="position:fixed;top:64px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 18px;border-radius:30px;font-size:13px;z-index:300;box-shadow:0 4px 12px rgba(0,0,0,.2);max-width:90%;text-align:center;transition:opacity .3s"></div>
+
+
+<!-- TELA LOGIN FUNCIONÁRIO -->
+<div class="container" id="loginScreen">
+  <div class="card login-box">
+    <h2 style="margin-bottom:14px;text-align:center">Selecionar Usuário</h2>
+    <div class="field">
+      <label>Usuário</label>
+      <select id="loginUser"></select>
+    </div>
+    <button class="btn btn-primary" onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
+<!-- TELA PRINCIPAL -->
+<div class="container hidden" id="mainScreen">
+
+  <div class="card">
+    <label>Código de barras</label>
+    <div id="reader"></div>
+    <div class="scan-row">
+      <input type="text" id="codigo" placeholder="Código (escaneie ou digite)" inputmode="numeric" onchange="consultarProduto(this.value)" onkeydown="if(event.key==='Enter'){consultarProduto(this.value)}">
+      <button class="btn btn-secondary" id="btnScan">📷</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="field">
+      <label>Descrição</label>
+      <input type="text" id="descricao" placeholder="Descrição do produto">
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Quantidade</label>
+        <input type="number" id="quantidade" min="1" value="1">
+      </div>
+      <div class="field">
+        <label>Vencimento</label>
+        <input type="date" id="vencimento">
+      </div>
+    </div>
+    <div class="field">
+      <label>Categoria</label>
+      <select id="categoria"></select>
+    </div>
+    <button class="btn btn-success" onclick="adicionarLancamento()">Adicionar Lançamento</button>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h2 style="font-size:15px">Meus Lançamentos</h2>
+      <span id="totalCount" style="font-size:12px;color:#64748b"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Cód</th><th>Descrição</th><th>Qtd</th><th>Categoria</th><th>Vencimento</th><th></th></tr>
+        </thead>
+        <tbody id="tabela"></tbody>
+      </table>
+    </div>
+    <div id="emptyMsg" class="empty">Nenhum lançamento ainda.</div>
+    <div class="actions-row">
+      <button class="btn btn-primary" onclick="exportarExcel()">Excel</button>
+      <button class="btn btn-warning" onclick="exportarPDF()">PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL LOGIN ADMIN -->
+<div class="modal-bg hidden" id="adminLoginModal">
+  <div class="modal">
+    <h2>Acesso Admin</h2>
+    <div class="field">
+      <label>Senha</label>
+      <input type="password" id="adminPass">
+    </div>
+    <div class="actions-row">
+      <button class="btn btn-secondary" onclick="closeModal('adminLoginModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="checkAdminPass()">Entrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PAINEL ADMIN -->
+<div class="modal-bg hidden" id="adminPanel">
+  <div class="modal">
+    <h2>Painel Admin</h2>
+    <div class="tabs">
+      <div class="tab active" id="tabUsers" onclick="switchTab('users')">Usuários</div>
+      <div class="tab" id="tabCats" onclick="switchTab('cats')">Categorias</div>
+      <div class="tab" id="tabPass" onclick="switchTab('pass')">Senha</div>
+    </div>
+
+    <div id="panelUsers">
+      <div class="scan-row" style="margin-bottom:10px">
+        <input type="text" id="newUserName" placeholder="Nome do usuário">
+        <button class="btn btn-primary" onclick="addUser()">+</button>
+      </div>
+      <div id="usersList"></div>
+    </div>
+
+    <div id="panelCats" class="hidden">
+      <div class="scan-row" style="margin-bottom:10px">
+        <input type="text" id="newCatName" placeholder="Nome da categoria">
+        <button class="btn btn-primary" onclick="addCat()">+</button>
+      </div>
+      <div id="catsList"></div>
+    </div>
+
+    <div id="panelPass" class="hidden">
+      <div class="field">
+        <label>Nova senha do Admin</label>
+        <input type="password" id="newAdminPass">
+      </div>
+      <button class="btn btn-primary" onclick="changeAdminPass()">Salvar Senha</button>
+    </div>
+
+    <div class="actions-row">
+      <button class="btn btn-secondary" onclick="salvarBanco()">⬇️ Exportar produtos.xlsx</button>
+      <button class="btn btn-secondary" onclick="closeModal('adminPanel')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVO PRODUTO -->
+<div class="modal-bg hidden" id="newProdModal">
+  <div class="modal">
+    <h2>Produto não encontrado</h2>
+    <p style="font-size:13px;color:#64748b;margin-bottom:10px">Código <b id="newProdCodigo"></b> não está no banco. Cadastre a descrição:</p>
+    <div class="field">
+      <label>Descrição</label>
+      <input type="text" id="newProdDesc" placeholder="Descrição do produto">
+    </div>
+    <div class="actions-row">
+      <button class="btn btn-secondary" onclick="closeModal('newProdModal')">Cancelar</button>
+      <button class="btn btn-success" onclick="confirmarNovoProduto()">Cadastrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+
+// ---------- BANCO DE PRODUTOS (Excel) ----------
+let produtosDB = new Map(); // codigoBarras(string) -> descricao
+const produtosFileName = 'produtos.xlsx';
+let novosProdutos = new Map(); // produtos cadastrados nesta sessão (localStorage)
+
+function setDbStatus(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.remove('hidden');
+  t.style.opacity = '1';
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(()=>{
+    t.style.opacity = '0';
+    setTimeout(()=>t.classList.add('hidden'), 300);
+  }, 3000);
+}
+
+function parseWorkbookArrayBuffer(buf){
+  const data = new Uint8Array(buf);
+  const wb = XLSX.read(data, {type:'array'});
+  produtosDB = new Map();
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1});
+  for(let i=1;i<rows.length;i++){
+    const cod = rows[i][0];
+    const desc = rows[i][1];
+    if(cod !== undefined && cod !== null && String(cod).trim()!==''){
+      produtosDB.set(String(cod).trim(), desc!=null? String(desc): '');
+    }
+  }
+}
+
+// Carrega produtos.xlsx automaticamente (mesma pasta do index.html, funciona no GitHub Pages)
+async function autoLoadProdutos(){
+  // produtos cadastrados localmente em sessões anteriores (persistem no navegador)
+  try{
+    const saved = load('novosProdutos');
+    if(saved) novosProdutos = new Map(Object.entries(saved));
+  }catch(e){}
+
+  try{
+    const resp = await fetch(produtosFileName, {cache:'no-store'});
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const buf = await resp.arrayBuffer();
+    parseWorkbookArrayBuffer(buf);
+    // mescla produtos novos salvos localmente
+    for(const [cod,desc] of novosProdutos.entries()) produtosDB.set(cod,desc);
+    setDbStatus(`✅ ${produtosDB.size} produtos carregados automaticamente de "${produtosFileName}".`);
+  }catch(err){
+    console.error(err);
+    for(const [cod,desc] of novosProdutos.entries()) produtosDB.set(cod,desc);
+    setDbStatus(`⚠️ Não foi possível carregar "${produtosFileName}" (verifique se o arquivo está na mesma pasta do index.html).`);
+  }
+}
+
+function consultarProduto(codigo){
+  codigo = String(codigo).trim();
+  if(!codigo) return;
+  const desc = produtosDB.get(codigo);
+  if(desc !== undefined){
+    document.getElementById('descricao').value = desc;
+  } else {
+    abrirNovoProdutoModal(codigo);
+  }
+}
+
+let codigoPendente = null;
+function abrirNovoProdutoModal(codigo){
+  codigoPendente = codigo;
+  document.getElementById('newProdCodigo').textContent = codigo;
+  document.getElementById('newProdDesc').value='';
+  openOverlay('newProdModal');
+}
+function confirmarNovoProduto(){
+  const desc = document.getElementById('newProdDesc').value.trim();
+  if(!desc){ alert('Digite a descrição.'); return; }
+  produtosDB.set(codigoPendente, desc);
+  novosProdutos.set(codigoPendente, desc);
+  save('novosProdutos', Object.fromEntries(novosProdutos));
+  document.getElementById('descricao').value = desc;
+  closeModal('newProdModal');
+  setDbStatus(`${produtosDB.size} produtos disponíveis (${novosProdutos.size} cadastrados localmente, ainda não estão no produtos.xlsx do repositório).`);
+}
+
+// Exporta produtos.xlsx atualizado (banco original + novos cadastrados localmente)
+// para você substituir manualmente o arquivo no repositório/GitHub Pages.
+function salvarBanco(){
+  if(produtosDB.size===0){ alert('Banco ainda não foi carregado.'); return; }
+  const rows = [['Código de barras','Descrição']];
+  for(const [cod,desc] of produtosDB.entries()){
+    rows.push([cod, desc]);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+  XLSX.writeFile(wb, produtosFileName);
+  setDbStatus(`${produtosDB.size} produtos exportados. Substitua o "${produtosFileName}" no seu repositório do GitHub Pages.`);
+}
+
+autoLoadProdutos();
+
+
+
+// ---------- DADOS ----------
+const DEFAULTS = {
+  adminPass: "1234",
+  users: ["João","Maria","Carlos"],
+  categories: ["Mercearia","Hortifruti","Frios","Bebidas","Limpeza","Higiene"],
+  lancamentos: [] // {id,user,codigo,descricao,quantidade,vencimento,categoria,data}
+};
+
+function load(key){ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
+function save(key,val){ localStorage.setItem(key, JSON.stringify(val)); }
+
+let data = {
+  adminPass: load('adminPass') || DEFAULTS.adminPass,
+  users: load('users') || DEFAULTS.users,
+  categories: load('categories') || DEFAULTS.categories,
+  lancamentos: load('lancamentos') || DEFAULTS.lancamentos
+};
+function persist(){
+  save('adminPass', data.adminPass);
+  save('users', data.users);
+  save('categories', data.categories);
+  save('lancamentos', data.lancamentos);
+}
+
+let currentUser = sessionStorage.getItem('currentUser') || null;
+
+// ---------- LOGIN ----------
+function refreshUserSelect(){
+  const sel = document.getElementById('loginUser');
+  sel.innerHTML = data.users.map(u=>`<option value="${u}">${u}</option>`).join('');
+}
+function doLogin(){
+  currentUser = document.getElementById('loginUser').value;
+  sessionStorage.setItem('currentUser', currentUser);
+  showMain();
+  history.pushState({screen:'main'}, '');
+}
+function showMain(){
+  if(!currentUser){ 
+    document.getElementById('loginScreen').classList.remove('hidden');
+    document.getElementById('mainScreen').classList.add('hidden');
+    document.getElementById('btnLogout').classList.add('hidden');
+    return;
+  }
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('mainScreen').classList.remove('hidden');
+  document.getElementById('btnLogout').classList.remove('hidden');
+  document.getElementById('appTitle').textContent = "📦 " + currentUser;
+  refreshCategorySelect();
+  renderTable();
+}
+document.getElementById('btnLogout').onclick = ()=>{
+  currentUser = null;
+  sessionStorage.removeItem('currentUser');
+  showMain();
+  if(history.state && history.state.screen==='main') history.back();
+};
+
+// ---------- CATEGORIA SELECT ----------
+function refreshCategorySelect(){
+  const sel = document.getElementById('categoria');
+  sel.innerHTML = data.categories.map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+
+// ---------- SCANNER ----------
+let html5QrCode;
+let scanning = false;
+document.getElementById('btnScan').onclick = ()=>{
+  const readerDiv = document.getElementById('reader');
+  if(scanning){
+    html5QrCode.stop().then(()=>{ readerDiv.innerHTML=''; scanning=false; });
+    return;
+  }
+  readerDiv.innerHTML = '';
+  html5QrCode = new Html5Qrcode("reader");
+  html5QrCode.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: 220 },
+    (decodedText)=>{
+      document.getElementById('codigo').value = decodedText;
+      html5QrCode.stop().then(()=>{ readerDiv.innerHTML=''; scanning=false; });
+      consultarProduto(decodedText);
+    },
+    ()=>{}
+  ).then(()=>{ scanning = true; }).catch(err=>{
+    alert('Não foi possível acessar a câmera: '+err);
+  });
+};
+
+// ---------- LANÇAMENTOS ----------
+function adicionarLancamento(){
+  const codigo = document.getElementById('codigo').value.trim();
+  const descricao = document.getElementById('descricao').value.trim();
+  const quantidade = parseInt(document.getElementById('quantidade').value) || 1;
+  const vencimento = document.getElementById('vencimento').value;
+  const categoria = document.getElementById('categoria').value;
+
+  if(!codigo || !descricao || !vencimento){
+    alert('Preencha código, descrição e vencimento.');
+    return;
+  }
+
+  data.lancamentos.push({
+    id: Date.now(),
+    user: currentUser,
+    codigo, descricao, quantidade, vencimento, categoria,
+    data: new Date().toISOString()
+  });
+  persist();
+
+  document.getElementById('codigo').value='';
+  document.getElementById('descricao').value='';
+  document.getElementById('quantidade').value=1;
+  document.getElementById('vencimento').value='';
+  renderTable();
+}
+
+function diasParaVencer(dataStr){
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const venc = new Date(dataStr+'T00:00:00');
+  return Math.floor((venc-hoje)/(1000*60*60*24));
+}
+function tagClasse(dias){
+  if(dias < 0) return 'tag-expired';
+  if(dias <= 7) return 'tag-red';
+  if(dias <= 15) return 'tag-orange';
+  if(dias <= 30) return 'tag-yellow';
+  return 'tag-green';
+}
+function formatarData(d){
+  const [y,m,dd] = d.split('-');
+  return `${dd}/${m}/${y}`;
+}
+
+function renderTable(){
+  const itens = data.lancamentos
+    .filter(l=>l.user===currentUser)
+    .sort((a,b)=> new Date(a.vencimento) - new Date(b.vencimento));
+
+  const tbody = document.getElementById('tabela');
+  const empty = document.getElementById('emptyMsg');
+  document.getElementById('totalCount').textContent = itens.length + ' item(ns)';
+
+  if(itens.length===0){
+    tbody.innerHTML='';
+    empty.style.display='block';
+    return;
+  }
+  empty.style.display='none';
+
+  tbody.innerHTML = itens.map(l=>{
+    const dias = diasParaVencer(l.vencimento);
+    return `<tr>
+      <td>${l.codigo}</td>
+      <td>${l.descricao}</td>
+      <td>${l.quantidade}</td>
+      <td>${l.categoria}</td>
+      <td><span class="tag ${tagClasse(dias)}">${formatarData(l.vencimento)}</span></td>
+      <td><button class="delete-x" onclick="removerLancamento(${l.id})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function removerLancamento(id){
+  if(!confirm('Remover este lançamento?')) return;
+  data.lancamentos = data.lancamentos.filter(l=>l.id!==id);
+  persist();
+  renderTable();
+}
+
+// ---------- EXPORTAÇÃO ----------
+function getExportData(){
+  return data.lancamentos
+    .filter(l=>l.user===currentUser)
+    .sort((a,b)=> new Date(a.vencimento) - new Date(b.vencimento))
+    .map(l=>({
+      Código: l.codigo,
+      Descrição: l.descricao,
+      Quantidade: l.quantidade,
+      Categoria: l.categoria,
+      Vencimento: formatarData(l.vencimento)
+    }));
+}
+
+function exportarExcel(){
+  const rows = getExportData();
+  if(rows.length===0){ alert('Sem lançamentos para exportar.'); return; }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Lançamentos");
+  XLSX.writeFile(wb, `lancamentos_${currentUser}_${dataHoje()}.xlsx`);
+}
+
+function exportarPDF(){
+  const rows = getExportData();
+  if(rows.length===0){ alert('Sem lançamentos para exportar.'); return; }
+  const doc = new jspdf.jsPDF();
+  doc.setFontSize(14);
+  doc.text(`Lançamentos - ${currentUser}`, 14, 15);
+  doc.setFontSize(10);
+  doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 14, 21);
+  doc.autoTable({
+    startY: 26,
+    head: [Object.keys(rows[0])],
+    body: rows.map(r=>Object.values(r)),
+    styles:{fontSize:9}
+  });
+  doc.save(`lancamentos_${currentUser}_${dataHoje()}.pdf`);
+}
+function dataHoje(){
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// ---------- ADMIN ----------
+document.getElementById('btnAdmin').onclick = ()=>{
+  document.getElementById('adminPass').value='';
+  openOverlay('adminLoginModal');
+};
+function openOverlay(id){
+  document.getElementById(id).classList.remove('hidden');
+  history.pushState({overlay:id}, '');
+}
+function closeModal(id){
+  document.getElementById(id).classList.add('hidden');
+  if(history.state && history.state.overlay===id) history.back();
+}
+function checkAdminPass(){
+  if(document.getElementById('adminPass').value === data.adminPass){
+    document.getElementById('adminLoginModal').classList.add('hidden');
+    document.getElementById('adminPanel').classList.remove('hidden');
+    history.replaceState({overlay:'adminPanel'}, '');
+    renderUsersList();
+    renderCatsList();
+  } else {
+    alert('Senha incorreta.');
+  }
+}
+function openAdminPanel(){
+  renderUsersList();
+  renderCatsList();
+  openOverlay('adminPanel');
+}
+function switchTab(tab){
+  document.getElementById('panelUsers').classList.toggle('hidden', tab!=='users');
+  document.getElementById('panelCats').classList.toggle('hidden', tab!=='cats');
+  document.getElementById('panelPass').classList.toggle('hidden', tab!=='pass');
+  document.getElementById('tabUsers').classList.toggle('active', tab==='users');
+  document.getElementById('tabCats').classList.toggle('active', tab==='cats');
+  document.getElementById('tabPass').classList.toggle('active', tab==='pass');
+}
+
+function renderUsersList(){
+  const el = document.getElementById('usersList');
+  el.innerHTML = data.users.map((u,i)=>`
+    <div class="list-item">
+      <span>${u}</span>
+      <button class="small-btn" onclick="removeUser(${i})">Remover</button>
+    </div>`).join('') || '<div class="empty">Nenhum usuário.</div>';
+}
+function addUser(){
+  const v = document.getElementById('newUserName').value.trim();
+  if(!v) return;
+  if(data.users.includes(v)){ alert('Usuário já existe.'); return; }
+  data.users.push(v);
+  persist();
+  document.getElementById('newUserName').value='';
+  renderUsersList();
+  refreshUserSelect();
+}
+function removeUser(i){
+  if(!confirm('Remover usuário? (lançamentos dele permanecem salvos)')) return;
+  data.users.splice(i,1);
+  persist();
+  renderUsersList();
+  refreshUserSelect();
+}
+
+function renderCatsList(){
+  const el = document.getElementById('catsList');
+  el.innerHTML = data.categories.map((c,i)=>`
+    <div class="list-item">
+      <span>${c}</span>
+      <button class="small-btn" onclick="removeCat(${i})">Remover</button>
+    </div>`).join('') || '<div class="empty">Nenhuma categoria.</div>';
+}
+function addCat(){
+  const v = document.getElementById('newCatName').value.trim();
+  if(!v) return;
+  if(data.categories.includes(v)){ alert('Categoria já existe.'); return; }
+  data.categories.push(v);
+  persist();
+  document.getElementById('newCatName').value='';
+  renderCatsList();
+  refreshCategorySelect();
+}
+function removeCat(i){
+  if(!confirm('Remover categoria?')) return;
+  data.categories.splice(i,1);
+  persist();
+  renderCatsList();
+  refreshCategorySelect();
+}
+
+function changeAdminPass(){
+  const v = document.getElementById('newAdminPass').value.trim();
+  if(!v){ alert('Digite uma senha.'); return; }
+  data.adminPass = v;
+  persist();
+  document.getElementById('newAdminPass').value='';
+  alert('Senha alterada!');
+}
+
+// ---------- INIT ----------
+refreshUserSelect();
+showMain();
+history.replaceState({screen: currentUser ? 'main' : 'login'}, '');
+
+// Botão voltar: fecha overlays/modais, ou volta da tela principal pro login (não sai do app)
+window.addEventListener('popstate', (e)=>{
+  const st = e.state;
+  // fecha qualquer modal/overlay aberto
+  document.querySelectorAll('.modal-bg').forEach(m=>{
+    if(!m.classList.contains('hidden')) m.classList.add('hidden');
+  });
+  if(!st || st.screen==='login'){
+    currentUser = null;
+    sessionStorage.removeItem('currentUser');
+    showMain();
+  }
+});
+
+// Registro do Service Worker (PWA)
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(err=>console.error('SW falhou:', err));
+  });
+}
+</script>
+</body>
+</html>
